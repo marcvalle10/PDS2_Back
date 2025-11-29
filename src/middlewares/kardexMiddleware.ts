@@ -14,15 +14,20 @@ const storage = multer.diskStorage({
     },
     filename: (_req, file, cb) => {
         const timestamp = Date.now();
-        const safeName = file.originalname.replace(/[^a-zA-Z0-9_.-]/g, "-");
+        // Permitir letras Unicode (acentos/ñ), dígitos, _ . - y espacios
+        // Reemplazar únicamente caracteres realmente problemáticos para FS
+        const safeName = file.originalname
+          .replace(/[^\p{L}\p{N}_.\- ]/gu, "-")
+          .replace(/\s+/g, " ")
+          .trim();
         cb(null, `${timestamp}_${safeName}`);
-    }
+ }
 });
 
-const allowedMimeTypes = ["application/pdf"];
+const allowedMimeTypes = ["application/pdf", "application/octet-stream"]; // algunos navegadores mandan octet-stream
 
 const fileFilter: multer.Options["fileFilter"] = (_req, file, cb) => {
-    if(!allowedMimeTypes.includes(file.mimetype)) {
+    if(!allowedMimeTypes.includes(file.mimetype) && !file.originalname.toLowerCase().endsWith(".pdf")) {
         cb(new Error('Solo se permiten archivos PDF'));
     }
     cb(null, true);

@@ -36,11 +36,24 @@ const decodeCIC = (cic: string) => {
 const parseGrade = (ord: string | null) => {
     if (!ord) return { calificacion: null, estatus: "SIN_CALIFICAR" };
     const t = ord.trim().toUpperCase();
-    if (t.includes("ACRED")) return { calificacion: null, estatus: "ACREDITADA" };
-    const n = parseInt(t, 10);
+    // Casos comunes en Kárdex UNISON
+    if (/(ACRE|ACRED|AC)/.test(t)) return { calificacion: null, estatus: "ACREDITADA" };
+    if (/^NP$/.test(t))            return { calificacion: null, estatus: "NO_PRESENTÓ" };
+    if (/^(NR|NA)$/.test(t))       return { calificacion: null, estatus: "NO_REGISTRADA" };
+    if (/^(REPRO|REPR)$/.test(t))  return { calificacion: null, estatus: "REPROBADA" };
+    if (/^EQ$/.test(t))            return { calificacion: null, estatus: "EQUIVALENCIA" };
+    const n = parseInt(t.replace(/[^\d]/g, ""), 10);
     if (!Number.isNaN(n)) return { calificacion: n, estatus: "ORDINARIO" };
-    return { calificacion: null, estatus: t };
+    return { calificacion: null, estatus: t as any };
 };
+
+const parseCreditos = (cr?: string | number | null) => {
+  const s = String(cr ?? "");
+  const m = s.match(/\d+/);
+  return m ? parseInt(m[0], 10) : 0;
+};
+
+
 
 // Split muy simple: "NOMBRES APELLIDO_P APELLIDO_M"
 const splitNombre = (full: string) => {
@@ -61,9 +74,10 @@ async function ensurePlanEstudio(version: string, nombrePrograma: string) {
         plan = repo.create({
             nombre: NFC(nombrePrograma) || `Plan ${version}`,
             version,
-            total_creditos: 0,
-            semestres_sugeridos: 0
+            totalCreditos: 0,
+            semestresSugeridos: 0
         });
+
         plan = await repo.save(plan);
     }
     return plan;
@@ -91,7 +105,10 @@ async function ensureMateria(codigo: string, nombre: string, cr: string, planId:
         materia = repo.create({
             codigo: codigo.trim(),
             nombre: NFC(nombre),
-            creditos: parseInt(cr, 10) || 0,
+           creditos: (() => {
+                const m = String(cr ?? "").match(/\d+/);
+                return m ? parseInt(m[0], 10) : 0;
+            })(),
             tipo: "OBLIGATORIA",
             plan_estudio_id: planId,
         });
@@ -109,12 +126,12 @@ async function ensureAlumno(expediente: string, fullName: string, planId: number
             matricula: expediente,
             expediente,
             nombre,
-            apellido_paterno: ap,
-            apellido_materno: am,
-            correo: `${expediente}@example.com`, // ajusta si tienes correo real
-            estado_academico: estado === "A" ? "ACTIVO" : "INACTIVO",
-            plan_estudio_id: planId,
-            total_creditos: 0
+            apellidoPaterno: ap,
+            apellidoMaterno: am,
+            correo: `${expediente}@example.com`,
+            estadoAcademico: estado === "A" ? "ACTIVO" : "INACTIVO",
+            planEstudio: { id: planId } as any,  // relación con PlanEstudio
+            totalCreditos: 0
         });
         alumno = await repo.save(alumno);
     }
